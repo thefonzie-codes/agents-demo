@@ -1,0 +1,25 @@
+# Virtual Environment
+.venv/
+CLAUDE.md
+GEMINI.md
+chat_logs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+
+# IDE and editor files
+.idea/
+.vscode/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+.customer_db.db
