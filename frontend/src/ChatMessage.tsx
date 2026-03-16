@@ -1,4 +1,5 @@
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Message } from "./types";
 
 interface ChatMessageProps {
@@ -26,7 +27,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             : "max-w-[85%] text-google-text markdown-body"
         }`}
       >
-        {isUser ? message.text : <Markdown>{message.text}</Markdown>}
+        {isUser ? message.text : <Markdown remarkPlugins={[remarkGfm]}>{message.text}</Markdown>}
       </div>
 
       {/* User avatar */}
