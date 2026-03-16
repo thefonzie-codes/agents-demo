@@ -73,7 +73,7 @@ The database contains: customers (contact info, loyalty points), destinations (l
 
 # --- Create the Agent ---
 travel_agent = Agent(
-    models=["gemini-2.5-flash"],
+    models=["gemini-3.1-flash-lite-preview"],
     tool_declarations=[query_db_declaration],
     tool_implementations={"query_db": query_db_tool},
     system_instruction=system_instruction,

@@ -80,7 +80,7 @@ def call_gemini_api(user_query):
             )
         ]
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.1-flash-preview",
             contents=contents,
             config=config
         )
