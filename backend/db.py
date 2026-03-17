@@ -1,10 +1,14 @@
 import sqlite3
 import random
 import os
+import json
 from datetime import datetime, timedelta
 from sample_datasets.travel_company_customer_db.data import *
 
-def generate_db(path:str, num_customers=10000):
+CHAT_DB_PATH = "./sample_datasets/travel_company_customer_db/travel_company.db"
+
+
+def generate_db(path: str, num_customers=10000):
     """Generate travel company database with sample data."""
     if os.path.exists(path):
         print("Database already exists, skipping generation")
@@ -18,14 +22,14 @@ def generate_db(path:str, num_customers=10000):
     cursor.execute("PRAGMA foreign_keys = ON")
 
     # Load and execute schema from SQL file
-    schema_path = 'sample_datasets/travel_company_customer_db/schema.sql'
-    with open(schema_path, 'r') as f:
+    schema_path = "sample_datasets/travel_company_customer_db/schema.sql"
+    with open(schema_path, "r") as f:
         schema_sql = f.read()
     cursor.executescript(schema_sql)
 
     # Re-enable foreign keys after executescript (which resets pragmas)
     cursor.execute("PRAGMA foreign_keys = ON")
-    
+
     # Convert sets to lists for random.choice
     first_names = list(FIRST_NAMES)
     last_names = list(LAST_NAMES)
@@ -40,93 +44,113 @@ def generate_db(path:str, num_customers=10000):
     payment_statuses = list(PAYMENT_STATUS)
     seasons = list(SEASONS)
     street_names = list(STREET_NAMES)
-    
+
     # Insert customers
     print(f"Inserting {num_customers} customers...")
     used_emails = set()
     customer_data = []
-    
+
     for i in range(num_customers):
         first_name = random.choice(first_names)
         last_name = random.choice(last_names)
-        
+
         # Generate unique email
-        email_base = f"{first_name.lower().replace(' ', '')}{last_name.lower().replace(' ', '')}"
+        email_base = (
+            f"{first_name.lower().replace(' ', '')}{last_name.lower().replace(' ', '')}"
+        )
         email = f"{email_base}@example.com"
         counter = 1
         while email in used_emails:
             email = f"{email_base}{counter}@example.com"
             counter += 1
         used_emails.add(email)
-        
+
         # Generate phone number
         phone = f"+1-{random.randint(200, 999)}-{random.randint(200, 999)}-{random.randint(1000, 9999)}"
-        
+
         # Generate address
         street_num = random.randint(1, 9999)
         street = random.choice(street_names)
         address = f"{street_num} {street}"
-        
+
         city = random.choice(cities)
         country = random.choice(countries)
-        
+
         # Generate date of birth (between 18 and 80 years old)
         years_old = random.randint(18, 80)
-        dob = datetime.now() - timedelta(days=years_old*365 + random.randint(0, 365))
-        dob_str = dob.strftime('%Y-%m-%d')
-        
+        dob = datetime.now() - timedelta(days=years_old * 365 + random.randint(0, 365))
+        dob_str = dob.strftime("%Y-%m-%d")
+
         # Generate passport number
         passport = f"{random.choice(['US', 'CA', 'UK', 'FR', 'DE', 'JP', 'AU'])}{random.randint(100000000, 999999999)}"
-        
+
         language = random.choice(languages)
         loyalty_points = random.randint(0, 5000)
-        
+
         # Created date (within last 2 years)
         created_days_ago = random.randint(0, 730)
         created_at = datetime.now() - timedelta(days=created_days_ago)
-        created_str = created_at.strftime('%Y-%m-%d %H:%M:%S')
-        
-        customer_data.append((
-            first_name, last_name, email, phone, address, city, country,
-            dob_str, passport, language, loyalty_points, created_str
-        ))
-    
-    cursor.executemany('''
+        created_str = created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+        customer_data.append(
+            (
+                first_name,
+                last_name,
+                email,
+                phone,
+                address,
+                city,
+                country,
+                dob_str,
+                passport,
+                language,
+                loyalty_points,
+                created_str,
+            )
+        )
+
+    cursor.executemany(
+        """
         INSERT INTO customers (first_name, last_name, email, phone, address, city, country,
                               date_of_birth, passport_number, preferred_language, loyalty_points, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', customer_data)
-    
+    """,
+        customer_data,
+    )
+
     # Insert destinations
     print("Inserting destinations...")
     dest_data = []
     for dest_name in list(destinations)[:50]:
         # Extract country from destination name
-        if ',' in dest_name:
-            dest_country = dest_name.split(',')[-1].strip()
+        if "," in dest_name:
+            dest_country = dest_name.split(",")[-1].strip()
         else:
             dest_country = random.choice(countries)
-        
+
         description = f"Explore the beauty and culture of {dest_name}"
         season = random.choice(seasons)
         price_per_day = round(random.uniform(50, 500), 2)
-        
+
         dest_data.append((dest_name, dest_country, description, season, price_per_day))
-    
-    cursor.executemany('''
+
+    cursor.executemany(
+        """
         INSERT INTO destinations (name, country, description, popular_season, avg_price_per_day)
         VALUES (?, ?, ?, ?, ?)
-    ''', dest_data)
-    
+    """,
+        dest_data,
+    )
+
     num_destinations = len(dest_data)
-    
+
     # Insert packages
     print("Inserting packages...")
     package_data = []
     pkg_names_list = list(package_names)[:50]
 
     # Create a mapping of destination_id to avg_price_per_day for quick lookup
-    cursor.execute('SELECT id, avg_price_per_day FROM destinations')
+    cursor.execute("SELECT id, avg_price_per_day FROM destinations")
     dest_prices = dict(cursor.fetchall())
 
     for pkg_name in pkg_names_list:
@@ -140,23 +164,39 @@ def generate_db(path:str, num_customers=10000):
         current_bookings = random.randint(0, max_capacity)
         description = f"Enjoy a {duration}-day {category.lower()} experience"
 
-        package_data.append((pkg_name, dest_id, duration, price, description, category, max_capacity, current_bookings))
-    
-    cursor.executemany('''
+        package_data.append(
+            (
+                pkg_name,
+                dest_id,
+                duration,
+                price,
+                description,
+                category,
+                max_capacity,
+                current_bookings,
+            )
+        )
+
+    cursor.executemany(
+        """
         INSERT INTO packages (name, destination_id, duration_days, price, description, category, max_capacity, current_bookings)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', package_data)
-    
+    """,
+        package_data,
+    )
+
     num_packages = len(package_data)
-    
+
     # Insert bookings
     num_bookings = min(num_customers * 2, 500)
     print(f"Inserting {num_bookings} bookings...")
     booking_data = []
 
     # Create a mapping of package_id to (duration, price) for quick lookup
-    cursor.execute('SELECT id, duration_days, price FROM packages')
-    package_info = {pkg_id: (duration, price) for pkg_id, duration, price in cursor.fetchall()}
+    cursor.execute("SELECT id, duration_days, price FROM packages")
+    package_info = {
+        pkg_id: (duration, price) for pkg_id, duration, price in cursor.fetchall()
+    }
 
     for i in range(num_bookings):
         customer_id = random.randint(1, num_customers)
@@ -165,18 +205,18 @@ def generate_db(path:str, num_customers=10000):
         # Booking date (within last year)
         booking_days_ago = random.randint(0, 365)
         booking_date = datetime.now() - timedelta(days=booking_days_ago)
-        booking_str = booking_date.strftime('%Y-%m-%d %H:%M:%S')
+        booking_str = booking_date.strftime("%Y-%m-%d %H:%M:%S")
 
         # Travel dates (in the future or recent past)
         travel_start_offset = random.randint(-30, 90)
         travel_start = datetime.now() + timedelta(days=travel_start_offset)
-        travel_start_str = travel_start.strftime('%Y-%m-%d')
+        travel_start_str = travel_start.strftime("%Y-%m-%d")
 
         # Get package duration and price
         duration, base_price = package_info[package_id]
 
         travel_end = travel_start + timedelta(days=duration)
-        travel_end_str = travel_end.strftime('%Y-%m-%d')
+        travel_end_str = travel_end.strftime("%Y-%m-%d")
 
         num_travelers = random.randint(1, 4)
         total_price = round(base_price * num_travelers, 2)
@@ -184,29 +224,48 @@ def generate_db(path:str, num_customers=10000):
         status = random.choice(booking_statuses)
 
         special_requests_list = [
-            "None", "None", "None", "Window seat preferred", "Vegetarian meals",
-            "Late check-in", "Wheelchair accessible", "Close to elevator",
-            "Extra towels", "King bed preferred"
+            "None",
+            "None",
+            "None",
+            "Window seat preferred",
+            "Vegetarian meals",
+            "Late check-in",
+            "Wheelchair accessible",
+            "Close to elevator",
+            "Extra towels",
+            "King bed preferred",
         ]
         special_request = random.choice(special_requests_list)
 
-        booking_data.append((
-            customer_id, package_id, booking_str, travel_start_str, travel_end_str,
-            num_travelers, total_price, status, special_request
-        ))
-    
-    cursor.executemany('''
+        booking_data.append(
+            (
+                customer_id,
+                package_id,
+                booking_str,
+                travel_start_str,
+                travel_end_str,
+                num_travelers,
+                total_price,
+                status,
+                special_request,
+            )
+        )
+
+    cursor.executemany(
+        """
         INSERT INTO bookings (customer_id, package_id, booking_date, travel_start_date, travel_end_date,
                              number_of_travelers, total_price, status, special_requests)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', booking_data)
-    
+    """,
+        booking_data,
+    )
+
     # Insert payments
     print("Inserting payments...")
     payment_data = []
 
     # Get all bookings with their total prices
-    cursor.execute('SELECT id, total_price FROM bookings')
+    cursor.execute("SELECT id, total_price FROM bookings")
     bookings = cursor.fetchall()
 
     for booking_id, booking_price in bookings:
@@ -222,19 +281,31 @@ def generate_db(path:str, num_customers=10000):
             # Payment date
             payment_days_ago = random.randint(0, 365)
             payment_date = datetime.now() - timedelta(days=payment_days_ago)
-            payment_str = payment_date.strftime('%Y-%m-%d %H:%M:%S')
+            payment_str = payment_date.strftime("%Y-%m-%d %H:%M:%S")
 
             payment_method = random.choice(payment_methods)
             transaction_id = f"TXN{random.randint(1000000000, 9999999999)}"
             payment_status = random.choice(payment_statuses)
 
-            payment_data.append((booking_id, amount, payment_str, payment_method, transaction_id, payment_status))
-    
-    cursor.executemany('''
+            payment_data.append(
+                (
+                    booking_id,
+                    amount,
+                    payment_str,
+                    payment_method,
+                    transaction_id,
+                    payment_status,
+                )
+            )
+
+    cursor.executemany(
+        """
         INSERT INTO payments (booking_id, amount, payment_date, payment_method, transaction_id, status)
         VALUES (?, ?, ?, ?, ?, ?)
-    ''', payment_data)
-    
+    """,
+        payment_data,
+    )
+
     # Insert cases
     print("Inserting support cases...")
     case_types = list(CASE_TYPES)
@@ -244,16 +315,24 @@ def generate_db(path:str, num_customers=10000):
 
     # Define which case types should link to bookings
     booking_related_types = [
-        "Booking Issue", "Payment Issue", "Billing", "Cancellation Request",
-        "Refund Request", "Complaint"
+        "Booking Issue",
+        "Payment Issue",
+        "Billing",
+        "Cancellation Request",
+        "Refund Request",
+        "Complaint",
     ]
     non_booking_types = [
-        "Account Management", "Technical Support", "Travel Inquiry",
-        "Customer Support", "Product Feedback", "Other"
+        "Account Management",
+        "Technical Support",
+        "Travel Inquiry",
+        "Customer Support",
+        "Product Feedback",
+        "Other",
     ]
 
     # Get actual number of bookings and create a mapping
-    cursor.execute('SELECT id, customer_id FROM bookings')
+    cursor.execute("SELECT id, customer_id FROM bookings")
     booking_customer_map = dict(cursor.fetchall())
     actual_num_bookings = len(booking_customer_map)
 
@@ -275,83 +354,95 @@ def generate_db(path:str, num_customers=10000):
             case_type = random.choice(non_booking_types)
             booking_id = None
             customer_id = random.randint(1, num_customers)
-        
+
         # Get matching subject and description for the case type
         subject = random.choice(CASE_SUBJECTS_BY_TYPE[case_type])
         description = random.choice(CASE_DESCRIPTIONS_BY_TYPE[case_type])
         status = random.choice(case_statuses)
-        
+
         # Assign priority based on case type with realistic distribution
         # Critical cases should be rare (5%) and specific to urgent situations
         subject_lower = subject.lower()
-        is_urgent = any(keyword in subject_lower for keyword in ["urgent", "emergency", "critical", "immediate"])
-        
+        is_urgent = any(
+            keyword in subject_lower
+            for keyword in ["urgent", "emergency", "critical", "immediate"]
+        )
+
         if case_type in ["Cancellation Request", "Complaint"] and is_urgent:
             # Emergency-related cases have higher chance of being critical
             priority = random.choices(
-                ["Low", "Medium", "High", "Critical"],
-                weights=[5, 15, 40, 40]
+                ["Low", "Medium", "High", "Critical"], weights=[5, 15, 40, 40]
             )[0]
         elif case_type in ["Complaint", "Refund Request", "Payment Issue"]:
             # Complaints, refunds, and payment issues tend to be higher priority
             priority = random.choices(
-                ["Low", "Medium", "High", "Critical"],
-                weights=[10, 30, 50, 10]
+                ["Low", "Medium", "High", "Critical"], weights=[10, 30, 50, 10]
             )[0]
         elif case_type in ["Cancellation Request", "Booking Issue"]:
             # Cancellations and booking issues are moderately urgent
             priority = random.choices(
-                ["Low", "Medium", "High", "Critical"],
-                weights=[15, 35, 45, 5]
+                ["Low", "Medium", "High", "Critical"], weights=[15, 35, 45, 5]
             )[0]
         elif case_type in ["Technical Support", "Account Management"]:
             # Tech and account issues are usually medium priority
             priority = random.choices(
-                ["Low", "Medium", "High", "Critical"],
-                weights=[20, 50, 28, 2]
+                ["Low", "Medium", "High", "Critical"], weights=[20, 50, 28, 2]
             )[0]
         else:
             # General inquiries, feedback, etc. are usually low to medium priority
             priority = random.choices(
-                ["Low", "Medium", "High", "Critical"],
-                weights=[40, 45, 14, 1]
+                ["Low", "Medium", "High", "Critical"], weights=[40, 45, 14, 1]
             )[0]
-        
+
         # 80% of cases are assigned to an agent
         if random.random() < 0.8:
             assigned_to = random.choice(agent_names)
         else:
             assigned_to = None
-        
+
         # Created date (within last 6 months)
         created_days_ago = random.randint(0, 180)
         created_at = datetime.now() - timedelta(days=created_days_ago)
-        created_str = created_at.strftime('%Y-%m-%d %H:%M:%S')
-        
+        created_str = created_at.strftime("%Y-%m-%d %H:%M:%S")
+
         # Updated date (between created and now)
         updated_days_ago = random.randint(0, created_days_ago)
         updated_at = datetime.now() - timedelta(days=updated_days_ago)
-        updated_str = updated_at.strftime('%Y-%m-%d %H:%M:%S')
-        
+        updated_str = updated_at.strftime("%Y-%m-%d %H:%M:%S")
+
         # Resolved date (only if status is Resolved or Closed)
-        if status in ['Resolved', 'Closed']:
+        if status in ["Resolved", "Closed"]:
             resolved_days_ago = random.randint(0, updated_days_ago)
             resolved_at = datetime.now() - timedelta(days=resolved_days_ago)
-            resolved_str = resolved_at.strftime('%Y-%m-%d %H:%M:%S')
+            resolved_str = resolved_at.strftime("%Y-%m-%d %H:%M:%S")
         else:
             resolved_str = None
-        
-        case_data.append((
-            customer_id, booking_id, case_type, subject, description,
-            status, priority, assigned_to, created_str, updated_str, resolved_str
-        ))
-    
-    cursor.executemany('''
+
+        case_data.append(
+            (
+                customer_id,
+                booking_id,
+                case_type,
+                subject,
+                description,
+                status,
+                priority,
+                assigned_to,
+                created_str,
+                updated_str,
+                resolved_str,
+            )
+        )
+
+    cursor.executemany(
+        """
         INSERT INTO cases (customer_id, booking_id, case_type, subject, description,
                           status, priority, assigned_to, created_at, updated_at, resolved_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', case_data)
-    
+    """,
+        case_data,
+    )
+
     conn.commit()
 
     # Verify foreign key constraints are enabled
@@ -359,33 +450,33 @@ def generate_db(path:str, num_customers=10000):
     fk_enabled = cursor.fetchone()[0]
 
     # Get final statistics
-    cursor.execute('SELECT COUNT(*) FROM customers')
+    cursor.execute("SELECT COUNT(*) FROM customers")
     final_customers = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM destinations')
+    cursor.execute("SELECT COUNT(*) FROM destinations")
     final_destinations = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM packages')
+    cursor.execute("SELECT COUNT(*) FROM packages")
     final_packages = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM bookings')
+    cursor.execute("SELECT COUNT(*) FROM bookings")
     final_bookings = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM payments')
+    cursor.execute("SELECT COUNT(*) FROM payments")
     final_payments = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM cases')
+    cursor.execute("SELECT COUNT(*) FROM cases")
     final_cases = cursor.fetchone()[0]
 
-    cursor.execute('SELECT COUNT(DISTINCT customer_id) FROM bookings')
+    cursor.execute("SELECT COUNT(DISTINCT customer_id) FROM bookings")
     customers_with_bookings = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(DISTINCT customer_id) FROM cases')
+    cursor.execute("SELECT COUNT(DISTINCT customer_id) FROM cases")
     customers_with_cases = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM cases WHERE booking_id IS NOT NULL')
+    cursor.execute("SELECT COUNT(*) FROM cases WHERE booking_id IS NOT NULL")
     cases_with_bookings = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM cases WHERE booking_id IS NULL')
+    cursor.execute("SELECT COUNT(*) FROM cases WHERE booking_id IS NULL")
     cases_without_bookings = cursor.fetchone()[0]
 
     conn.close()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("✅ Database Generation Complete!")
-    print("="*60)
+    print("=" * 60)
     print(f"Foreign key constraints: {'ENABLED' if fk_enabled else 'DISABLED'}")
 
     print(f"\n📊 Summary Statistics:")
@@ -397,12 +488,21 @@ def generate_db(path:str, num_customers=10000):
     print(f"    • {final_payments:,} payments")
     print(f"    • {final_cases:,} support cases")
     print(f"\n  Relationships:")
-    print(f"    • {customers_with_bookings:,} customers have bookings ({customers_with_bookings/final_customers*100:.1f}%)")
-    print(f"    • {customers_with_cases:,} customers have cases ({customers_with_cases/final_customers*100:.1f}%)")
-    print(f"    • {cases_with_bookings:,} cases linked to bookings ({cases_with_bookings/final_cases*100:.1f}%)")
-    print(f"    • {cases_without_bookings:,} cases without booking link ({cases_without_bookings/final_cases*100:.1f}%)")
+    print(
+        f"    • {customers_with_bookings:,} customers have bookings ({customers_with_bookings / final_customers * 100:.1f}%)"
+    )
+    print(
+        f"    • {customers_with_cases:,} customers have cases ({customers_with_cases / final_customers * 100:.1f}%)"
+    )
+    print(
+        f"    • {cases_with_bookings:,} cases linked to bookings ({cases_with_bookings / final_cases * 100:.1f}%)"
+    )
+    print(
+        f"    • {cases_without_bookings:,} cases without booking link ({cases_without_bookings / final_cases * 100:.1f}%)"
+    )
 
     print(f"\n✓ Database generated successfully at {path}!")
+
 
 def query_db(query: str) -> list:
     """Execute a query on the database."""
@@ -410,7 +510,9 @@ def query_db(query: str) -> list:
         raise Exception("DROP operations are not allowed.")
 
     try:
-        conn = sqlite3.connect("./sample_datasets/travel_company_customer_db/travel_company.db")
+        conn = sqlite3.connect(
+            "./sample_datasets/travel_company_customer_db/travel_company.db"
+        )
         cursor = conn.cursor()
         # Enable foreign key constraints
         cursor.execute("PRAGMA foreign_keys = ON")
@@ -422,10 +524,141 @@ def query_db(query: str) -> list:
         print(f"Error querying database: {e}")
         return []
 
-def delete_db(path:str):
+
+def delete_db(path: str):
     if os.path.exists(path):
         try:
             os.remove(path)
             print(f"File '{path}' deleted successfully.")
         except OSError as e:
             print(f"Error deleting file '{path}': {e}")
+
+
+CHAT_DB_PATH = "./sample_datasets/travel_company_customer_db/travel_company.db"
+
+
+def get_chat_conn():
+    conn = sqlite3.connect(CHAT_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def save_chat_session(session_id: str, title: str, messages: list) -> None:
+    conn = get_chat_conn()
+    cursor = conn.cursor()
+    messages_json = json.dumps(messages)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute(
+        """
+        INSERT INTO chat_sessions (session_id, title, messages, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(session_id) DO UPDATE SET
+            title = excluded.title,
+            messages = excluded.messages,
+            updated_at = excluded.updated_at
+    """,
+        (session_id, title, messages_json, now, now),
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def get_chat_session(session_id: str) -> dict | None:
+    conn = get_chat_conn()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT session_id, title, messages, created_at, updated_at
+        FROM chat_sessions WHERE session_id = ?
+    """,
+        (session_id,),
+    )
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return {
+            "session_id": row["session_id"],
+            "title": row["title"],
+            "messages": json.loads(row["messages"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+    return None
+
+
+def get_all_chat_sessions() -> list:
+    conn = get_chat_conn()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT session_id, title, created_at, updated_at
+        FROM chat_sessions
+        ORDER BY updated_at DESC
+    """
+    )
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [
+        {
+            "session_id": row["session_id"],
+            "title": row["title"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    ]
+
+
+def delete_chat_session(session_id: str) -> bool:
+    conn = get_chat_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM chat_sessions WHERE session_id = ?", (session_id,))
+    deleted = cursor.rowcount > 0
+
+    conn.commit()
+    conn.close()
+
+    return deleted
+
+
+def rename_chat_session(session_id: str, new_title: str) -> bool:
+    conn = get_chat_conn()
+    cursor = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute(
+        "UPDATE chat_sessions SET title = ?, updated_at = ? WHERE session_id = ?",
+        (new_title, now, session_id),
+    )
+
+    updated = cursor.rowcount > 0
+
+    conn.commit()
+    conn.close()
+
+    return updated
+
+
+def cleanup_old_chat_sessions(days: int = 7) -> int:
+    conn = get_chat_conn()
+    cursor = conn.cursor()
+
+    cutoff = datetime.now() - timedelta(days=days)
+    cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute("DELETE FROM chat_sessions WHERE updated_at < ?", (cutoff_str,))
+    deleted = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+
+    return deleted

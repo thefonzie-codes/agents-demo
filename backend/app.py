@@ -1,11 +1,23 @@
 import uuid
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from ai.agent import Agent
-from db import generate_db, query_db
+from db import (
+    generate_db,
+    query_db,
+    save_chat_session,
+    get_chat_session,
+    get_all_chat_sessions,
+    delete_chat_session,
+    rename_chat_session,
+    cleanup_old_chat_sessions,
+)
 
 load_dotenv()
+
+CHAT_SESSION_TTL_DAYS = int(os.getenv("CHAT_SESSION_TTL_DAYS", "7"))
 
 # --- Database setup ---
 DB_PATH = "./sample_datasets/travel_company_customer_db/travel_company.db"
@@ -13,6 +25,11 @@ SCHEMA_PATH = "./sample_datasets/travel_company_customer_db/schema.sql"
 
 print("Generating Mock Travel Company Customer Data...")
 generate_db(DB_PATH)
+
+print(f"Cleaning up chat sessions older than {CHAT_SESSION_TTL_DAYS} days...")
+deleted = cleanup_old_chat_sessions(CHAT_SESSION_TTL_DAYS)
+if deleted > 0:
+    print(f"Deleted {deleted} old chat sessions")
 
 # --- Load schema for tool declaration ---
 schema = open(SCHEMA_PATH, "r").read()
@@ -79,9 +96,6 @@ travel_agent = Agent(
     system_instruction=system_instruction,
 )
 
-# --- Session store: session_id -> chat_history (list of Gemini Content objects) ---
-sessions: dict[str, list] = {}
-
 # --- Flask app ---
 app = Flask(__name__)
 CORS(app)
@@ -98,31 +112,90 @@ def chat():
         return jsonify({"error": "Message cannot be empty"}), 400
 
     session_id = data.get("session_id")
-    if not session_id or session_id not in sessions:
-        session_id = str(uuid.uuid4())
-        sessions[session_id] = []
 
-    chat_history = sessions[session_id]
+    if session_id:
+        existing_session = get_chat_session(session_id)
+        if existing_session:
+            chat_history = existing_session.get("messages", [])
+            current_title = existing_session.get("title", "")
+        else:
+            chat_history = []
+            current_title = ""
+    else:
+        session_id = str(uuid.uuid4())
+        chat_history = []
+        current_title = ""
 
     try:
         response_text, updated_history = travel_agent.call_with_history(
             prompt=message,
             chat_history=chat_history,
         )
-        sessions[session_id] = updated_history
 
-        return jsonify({
-            "response": response_text,
-            "session_id": session_id,
-        })
+        if not current_title:
+            title = f"Conversation - {message[:30]}..."
+            if len(message) > 30:
+                title += "..."
+        else:
+            title = current_title
+
+        messages_to_save = [
+            {"role": "user", "text": message},
+            {"role": "assistant", "text": response_text},
+        ]
+        save_chat_session(session_id, title, messages_to_save)
+
+        return jsonify(
+            {
+                "response": response_text,
+                "session_id": session_id,
+            }
+        )
     except Exception as e:
         return jsonify({"error": f"Agent error: {str(e)}"}), 500
 
 
+@app.route("/api/sessions", methods=["GET"])
+def list_sessions():
+    sessions = get_all_chat_sessions()
+    return jsonify({"sessions": sessions})
+
+
+@app.route("/api/sessions/<session_id>", methods=["GET"])
+def get_session(session_id):
+    session = get_chat_session(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+    return jsonify(session)
+
+
+@app.route("/api/sessions/<session_id>", methods=["DELETE"])
+def delete_session(session_id):
+    deleted = delete_chat_session(session_id)
+    if not deleted:
+        return jsonify({"error": "Session not found"}), 404
+    return jsonify({"status": "deleted"})
+
+
+@app.route("/api/sessions/<session_id>/rename", methods=["POST"])
+def rename_session(session_id):
+    data = request.get_json()
+    if not data or "title" not in data:
+        return jsonify({"error": "Missing 'title' in request body"}), 400
+
+    new_title = data["title"].strip()
+    if not new_title:
+        return jsonify({"error": "Title cannot be empty"}), 400
+
+    updated = rename_chat_session(session_id, new_title)
+    if not updated:
+        return jsonify({"error": "Session not found"}), 404
+    return jsonify({"status": "renamed", "title": new_title})
+
+
 @app.route("/api/session/<session_id>", methods=["DELETE"])
 def clear_session(session_id):
-    if session_id in sessions:
-        del sessions[session_id]
+    deleted = delete_chat_session(session_id)
     return jsonify({"status": "cleared"})
 
 

@@ -78,3 +78,11 @@ CREATE TABLE cases (
     FOREIGN KEY (customer_id) REFERENCES customers(id),
     FOREIGN KEY (booking_id) REFERENCES bookings(id)
 );
+
+CREATE TABLE chat_sessions (
+    session_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    messages TEXT NOT NULL
+);
