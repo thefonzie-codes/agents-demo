@@ -2,6 +2,7 @@ from google import genai
 from google.genai import types
 from typing import Optional, List, Dict, Callable
 
+
 class Agent:
     """
     Reusable AI agent class for industry-specific assistants.
@@ -18,7 +19,7 @@ class Agent:
         models: Optional[List[str]] = None,
         tool_declarations: Optional[List[Dict]] = None,
         tool_implementations: Optional[Dict[str, Callable]] = None,
-        system_instruction: str = ""
+        system_instruction: str = "",
     ):
         self.client = genai.Client()
 
@@ -38,8 +39,7 @@ class Agent:
 
         # Create config
         self.config = types.GenerateContentConfig(
-            tools=tools,
-            system_instruction=system_instruction
+            tools=tools, system_instruction=system_instruction
         )
 
         # Store system instruction for reference
@@ -63,18 +63,11 @@ class Agent:
                 contents.extend(chat_history)
 
             # Add current user prompt
-            contents.append(
-                types.Content(
-                    role="user",
-                    parts=[types.Part(text=prompt)]
-                )
-            )
+            contents.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
 
             # Make initial API call
             response = self.client.models.generate_content(
-                model=self.models[0],
-                contents=contents,
-                config=self.config
+                model=self.models[0], contents=contents, config=self.config
             )
 
             # Check if the model wants to call a tool/function
@@ -93,7 +86,9 @@ class Agent:
 
                     # Append model's response and function result to contents
                     contents.append(response.candidates[0].content)
-                    contents.append(types.Content(role="user", parts=[function_response_part]))
+                    contents.append(
+                        types.Content(role="user", parts=[function_response_part])
+                    )
 
                     # Make second API call with function results
                     final_response = self.client.models.generate_content(
@@ -112,7 +107,18 @@ class Agent:
         except Exception as e:
             return f"Error calling agent: {str(e)}"
 
-    def call_with_history(self, prompt: str, chat_history: Optional[List] = None) -> tuple:
+    def _convert_to_content(self, message):
+        """Convert message dict to types.Content if needed."""
+        if isinstance(message, types.Content):
+            return message
+        if isinstance(message, dict):
+            text = message.get("text", "") or ""
+            return types.Content(role=message["role"], parts=[types.Part(text=text)])
+        return message
+
+    def call_with_history(
+        self, prompt: str, chat_history: Optional[List] = None
+    ) -> tuple:
         """
         Call the agent and return both response and updated chat history.
 
@@ -127,23 +133,18 @@ class Agent:
         if chat_history is None:
             chat_history = []
 
-        # Add user message to history
-        chat_history.append(
-            types.Content(
-                role="user",
-                parts=[types.Part(text=prompt)]
-            )
-        )
+        # Convert dict-format messages to types.Content objects
+        converted_history = [self._convert_to_content(msg) for msg in chat_history]
 
-        # Get response
-        response = self.call(prompt, chat_history[:-1])  # Pass history without the current prompt
+        # Add user message to history
+        chat_history.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
+
+        # Get response - pass converted history (without current prompt, call() adds it)
+        response = self.call(prompt, converted_history)
 
         # Add agent response to history
         chat_history.append(
-            types.Content(
-                role="model",
-                parts=[types.Part(text=response)]
-            )
+            types.Content(role="model", parts=[types.Part(text=response)])
         )
 
         return response, chat_history

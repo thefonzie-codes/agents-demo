@@ -132,6 +132,24 @@ def chat():
             chat_history=chat_history,
         )
 
+        # Convert Content objects back to dict format for storage
+        messages_to_save = []
+        for msg in updated_history:
+            if hasattr(msg, "role") and hasattr(msg, "parts"):
+                # It's a types.Content object
+                text = msg.parts[0].text if msg.parts and msg.parts[0].text else ""
+                # Map "model" to "assistant" for frontend compatibility
+                role = "assistant" if msg.role == "model" else msg.role
+                if text:  # Only save non-empty messages
+                    messages_to_save.append({"role": role, "text": text})
+            else:
+                # It's already a dict - also map model to assistant
+                msg_role = msg.get("role", "user")
+                role = "assistant" if msg_role == "model" else msg_role
+                msg_text = msg.get("text", "") or ""
+                if msg_text:  # Only save non-empty messages
+                    messages_to_save.append({"role": role, "text": msg_text})
+
         if not current_title:
             title = f"Conversation - {message[:30]}..."
             if len(message) > 30:
@@ -139,10 +157,6 @@ def chat():
         else:
             title = current_title
 
-        messages_to_save = [
-            {"role": "user", "text": message},
-            {"role": "assistant", "text": response_text},
-        ]
         save_chat_session(session_id, title, messages_to_save)
 
         return jsonify(

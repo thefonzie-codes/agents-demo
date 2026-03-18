@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# Testing
+.pytest_cache/
+__test__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md
+
+# Environment
+.env
+.env.local
+
+# Database (will be generated at runtime)
+*.db
+
+# Node (frontend)
+node_modules/
+dist/
