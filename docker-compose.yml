@@ -1,20 +1,13 @@
 version: '3.8'
 
 services:
-  backend:
+  travel-agent:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     ports:
-      - "5000:5000"
+      - "80:80"
     environment:
-      - FLASK_APP=app.py
+      - FLASK_APP=backend/app.py
       - PYTHONUNBUFFERED=1
-    volumes:
-      - db-data:/app/sample_datasets/travel_company_customer_db
     restart: unless-stopped
-    # For local development with hot reload, uncomment:
-    # profiles: ["dev"]
-
-volumes:
-  db-data:

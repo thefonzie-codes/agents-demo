@@ -7,7 +7,7 @@ set -e
 
 echo "=== Travel Agent Deployment ==="
 
-# Navigate to app directory (adjust path as needed)
+# Navigate to app directory
 cd /home/$USER/travel-agent 2>/dev/null || cd "$(dirname "$0")"
 
 # Pull latest changes
@@ -16,8 +16,9 @@ git pull origin main
 
 # Build and start the container
 echo "Building and starting Docker container..."
-docker-compose build backend
-docker-compose up -d backend
+docker-compose build
+docker-compose up -d
 
 echo "=== Deployment Complete ==="
-echo "Backend running on port 5000"
+echo "App running on port 80"
+echo "Backend API at http://<your-ip>/api/"
