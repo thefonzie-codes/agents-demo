@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   travel-agent:
     build:
@@ -11,3 +9,5 @@ services:
       - FLASK_APP=backend/app.py
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
+    env_file:
+      - ./backend/.env

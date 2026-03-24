@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # Stage 1: Build React frontend
 FROM node:20-alpine AS frontend-builder
 
@@ -13,7 +15,7 @@ COPY frontend/public ./public
 COPY frontend/vite.config.ts ./
 COPY frontend/tsconfig*.json ./
 COPY frontend/eslint.config.js ./
-COPY frontend/.env ./
+# COPY frontend/.env ./
 
 RUN npm run build
 
